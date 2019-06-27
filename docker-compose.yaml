@@ -1,0 +1,52 @@
+version: '2'
+
+volumes:
+  front_proxy_conf:
+  front_proxy_vhostd:
+  front_proxy_html:
+  front_proxy_certs:
+
+services:
+  #FRONTAL PROXY
+  front-proxy:
+    restart: always
+    image: jwilder/nginx-proxy
+    ports:
+    - "80:80"
+    - "443:443"
+    volumes:
+    - front_proxy_conf:/etc/nginx
+    - front_proxy_vhostd:/etc/nginx/vhost.d
+    - front_proxy_certs:/etc/nginx/certs:ro
+    - front_proxy_html:/usr/share/nginx/html
+    - /var/run/docker.sock:/tmp/docker.sock:ro
+    labels:
+      com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+
+  letsencrypt-companion:
+    restart: always
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    depends_on:
+    - front-proxy
+    volumes:
+    - front_proxy_conf:/etc/nginx:ro
+    - front_proxy_vhostd:/etc/nginx/vhost.d:rw
+    - front_proxy_certs:/etc/nginx/certs:rw
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    volumes_from:
+    - front-proxy
+
+
+  #HOSTS
+  rancher:
+    depends_on:
+    - letsencrypt-companion
+    restart: always
+    image: rancher/server
+    volumes:
+    - /home/docker/base/rancher/mysql:/var/lib/mysql
+    environment:
+      VIRTUAL_HOST: example.com
+      VIRTUAL_PORT: 8080
+      LETSENCRYPT_HOST: example.com
+      LETSENCRYPT_EMAIL: contact@example.com
